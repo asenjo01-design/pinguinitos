@@ -1,0 +1,166 @@
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display:ital@0;1&display=swap");
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "DM Sans", sans-serif;
+  --font-serif: "DM Serif Display", serif;
+}
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    margin: 0;
+    background: #f4f8fc;
+    color: #0d2038;
+    font-family: var(--font-sans);
+  }
+
+  button,
+  a,
+  select {
+    cursor: pointer;
+  }
+
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    outline: 2px solid #1683c7;
+    outline-offset: 3px;
+  }
+}
+
+@layer components {
+  .primary-button {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    border-radius: 9999px;
+    background: #0b3b6e;
+    padding: 0.9rem 1.35rem;
+    color: white;
+    font-size: 0.875rem;
+    font-weight: 600;
+    transition: transform 180ms ease, background 180ms ease;
+  }
+
+  .primary-button:hover {
+    background: #10558f;
+    transform: translateY(-1px);
+  }
+
+  .nav-link {
+    position: relative;
+    color: rgb(13 32 56 / 0.7);
+    transition: color 180ms ease;
+  }
+
+  .nav-link:hover {
+    color: #0d2038;
+  }
+
+  .nav-link::after {
+    position: absolute;
+    right: 0;
+    bottom: -0.35rem;
+    left: 0;
+    height: 1px;
+    background: #0d2038;
+    content: "";
+    transform: scaleX(0);
+    transition: transform 180ms ease;
+  }
+
+  .nav-link:hover::after {
+    transform: scaleX(1);
+  }
+
+  .eyebrow {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: rgb(13 32 56 / 0.5);
+  }
+
+  .social-button,
+  .icon-button {
+    display: grid;
+    place-items: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    border: 1px solid rgb(13 32 56 / 0.14);
+    border-radius: 9999px;
+    transition: background 180ms ease, color 180ms ease;
+  }
+
+  .social-button:hover,
+  .icon-button:hover {
+    background: #0b3b6e;
+    color: white;
+  }
+
+  .field-label {
+    display: grid;
+    gap: 0.45rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+
+  .field {
+    width: 100%;
+    border: 1px solid rgb(13 32 56 / 0.14);
+    border-radius: 0.75rem;
+    background: #f4f8fc;
+    padding: 0.8rem 0.9rem;
+    font-size: 0.875rem;
+    font-weight: 400;
+    outline: none;
+  }
+
+  .field:focus {
+    border-color: #0b5b9d;
+  }
+}
+
+/* Blue-toned surface map for the existing storefront, checkout and back office. */
+@layer utilities {
+  [class~="bg-[#f8f7f2]"] { background-color: #f4f8fc !important; }
+  [class~="bg-[#e7ddcf]"] { background-color: #d7e9f7 !important; }
+  [class~="bg-[#eae8df]"] { background-color: #e5f0fa !important; }
+  [class~="bg-[#dedbd0]"] { background-color: #d5e6f4 !important; }
+  [class~="bg-[#ebe8df]"] { background-color: #e9f3fb !important; }
+  [class~="bg-[#eeece4]"] { background-color: #e8f1f8 !important; }
+  [class~="bg-[#f1efe8]"] { background-color: #eff6fc !important; }
+  [class~="bg-[#dce7d9]"] { background-color: #dceeff !important; }
+  [class~="bg-[#f7e3dc]"] { background-color: #dcebfa !important; }
+  [class~="bg-[#1d3b2a]"] { background-color: #0b3b6e !important; }
+  [class~="text-[#1d2620]"] { color: #0d2038 !important; }
+  [class~="text-[#b45132]"] { color: #0e5d9f !important; }
+  [class~="text-[#8c3b25]"] { color: #0e4e82 !important; }
+  [class~="text-[#1d3b2a]"] { color: #0b3b6e !important; }
+  [class~="text-[#c6d8bf]"] { color: #a9d4f2 !important; }
+  [class~="border-[#1d2620]"] { border-color: #0d2038 !important; }
+  [class~="border-[#1d3b2a]"] { border-color: #0b3b6e !important; }
+  [class~="focus:border-[#1d3b2a]"]:focus { border-color: #0b5b9d !important; }
+
+  [class*="bg-[#f8f7f2]/"] { background-color: rgb(244 248 252 / 0.95) !important; }
+  [class*="bg-[#1d2620]/"] { background-color: rgb(13 32 56 / 0.45) !important; }
+  [class*="text-[#1d2620]/"] { color: rgb(13 32 56 / 0.65) !important; }
+  [class*="border-[#1d2620]/"] { border-color: rgb(13 32 56 / 0.12) !important; }
+}
+
+@media (hover: none) {
+  .product-card button {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

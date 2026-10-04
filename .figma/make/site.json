@@ -1,0 +1,10 @@
+{
+  "description": "This online sales platform enables users to effortlessly sell products with a user-friendly interface, featuring a shopping cart, image uploads, and social media integration.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
