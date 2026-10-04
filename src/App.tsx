@@ -322,11 +322,15 @@ export default function App() {
   const [editing, setEditing] = useState<Product | null>(null)
   const [toast, setToast] = useState("")
 
-  useEffect(
-    () =>
-      localStorage.setItem("pinguinitos-products-v2", JSON.stringify(products)),
-    [products],
-  )
+  useEffect(() => {
+    try {
+      localStorage.setItem("pinguinitos-products-v2", JSON.stringify(products))
+    } catch {
+      setToast(
+        "No se pudo guardar permanentemente: la imagen ocupa demasiado espacio.",
+      )
+    }
+  }, [products])
   useEffect(
     () =>
       localStorage.setItem("pinguinitos-socials-v1", JSON.stringify(socials)),
@@ -1427,6 +1431,7 @@ function AdminPanel({
   const [form, setForm] = useState(emptyForm)
   const [socialForm, setSocialForm] = useState(socials)
   const [showForm, setShowForm] = useState(false)
+  const [imageError, setImageError] = useState("")
   const totalSales = orders.reduce((sum, order) => sum + order.total, 0)
   const soldUnits = orders.reduce(
     (sum, order) =>
@@ -1442,12 +1447,44 @@ function AdminPanel({
     }
   }, [editing])
 
-  const handleImage = (file?: File) => {
+  const handleImage = async (file?: File) => {
     if (!file) return
-    const reader = new FileReader()
-    reader.onload = () =>
-      setForm((current) => ({ ...current, image: String(reader.result) }))
-    reader.readAsDataURL(file)
+    setImageError("")
+    if (!file.type.startsWith("image/")) {
+      setImageError("Selecciona una imagen PNG, JPG o WEBP.")
+      return
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      setImageError("La imagen debe pesar menos de 8 MB.")
+      return
+    }
+
+    const objectUrl = URL.createObjectURL(file)
+    try {
+      const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const preview = new Image()
+        preview.onload = () => resolve(preview)
+        preview.onerror = () => reject(new Error("No se pudo leer la imagen"))
+        preview.src = objectUrl
+      })
+      const maximumSide = 960
+      const scale = Math.min(1, maximumSide / Math.max(image.width, image.height))
+      const canvas = document.createElement("canvas")
+      canvas.width = Math.round(image.width * scale)
+      canvas.height = Math.round(image.height * scale)
+      canvas.getContext("2d")?.drawImage(image, 0, 0, canvas.width, canvas.height)
+      const compressedImage = canvas.toDataURL("image/jpeg", 0.8)
+
+      if (compressedImage.length > 900000) {
+        setImageError("No fue posible optimizar la imagen lo suficiente. Prueba otra foto.")
+        return
+      }
+      setForm((current) => ({ ...current, image: compressedImage }))
+    } catch {
+      setImageError("No se pudo procesar esta imagen. Prueba con PNG, JPG o WEBP.")
+    } finally {
+      URL.revokeObjectURL(objectUrl)
+    }
   }
 
   const submit = (event: FormEvent) => {
@@ -1534,7 +1571,7 @@ function AdminPanel({
                   </span>
                   <strong className="mt-4 block text-sm">Cargar imagen</strong>
                   <small className="mt-1 block text-[#1d2620]/45">
-                    PNG o JPG
+                    PNG, JPG o WEBP · se optimiza automáticamente
                   </small>
                 </span>
               )}
@@ -1544,6 +1581,11 @@ function AdminPanel({
                 onChange={(event) => handleImage(event.target.files?.[0])}
                 type="file"
               />
+              {imageError && (
+                <span className="absolute inset-x-4 bottom-4 rounded-lg bg-white/95 px-3 py-2 text-xs font-semibold text-[#0e5d9f] shadow-sm" role="alert">
+                  {imageError}
+                </span>
+              )}
             </label>
             <div className="grid content-start gap-5">
               <div className="flex items-center justify-between">
