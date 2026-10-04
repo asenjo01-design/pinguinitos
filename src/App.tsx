@@ -1,5 +1,9 @@
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react"
+import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from "firebase/auth"
+import { addDoc, collection, doc, onSnapshot, setDoc } from "firebase/firestore"
+import { getDownloadURL, ref, uploadBytes } from "firebase/storage"
 import jabonesDeportivos from "./assets/pinguinitos-producto-adjunto.png"
+import { auth, db, storage } from "./firebase"
 
 type Product = {
   id: number
@@ -313,33 +317,72 @@ export default function App() {
   const [checkoutOpen, setCheckoutOpen] = useState(false)
   const [adminOpen, setAdminOpen] = useState(false)
   const [loginOpen, setLoginOpen] = useState(false)
-  const [isAdmin, setIsAdmin] = useState(
-    () => sessionStorage.getItem("pinguinitos-admin-session") === "active",
-  )
+  const [isAdmin, setIsAdmin] = useState(false)
   const [search, setSearch] = useState("")
   const [category, setCategory] = useState("Todos")
   const [sort, setSort] = useState("Destacados")
   const [editing, setEditing] = useState<Product | null>(null)
   const [toast, setToast] = useState("")
 
+  const storeRef = doc(db, "pinguinitos", "store")
+
   useEffect(() => {
-    try {
-      localStorage.setItem("pinguinitos-products-v2", JSON.stringify(products))
-    } catch {
-      setToast(
-        "No se pudo guardar permanentemente: la imagen ocupa demasiado espacio.",
-      )
-    }
-  }, [products])
+    const unsubscribe = onSnapshot(
+      storeRef,
+      (snapshot) => {
+        if (!snapshot.exists()) {
+          if (isAdmin) void setDoc(storeRef, { products, socials })
+          return
+        }
+        const data = snapshot.data()
+        if (Array.isArray(data.products)) setProducts(data.products as Product[])
+        if (data.socials) setSocials(data.socials as SocialLinks)
+      },
+      () => setToast("No se pudo sincronizar con Firebase."),
+    )
+    return unsubscribe
+  }, [isAdmin])
+
   useEffect(
     () =>
-      localStorage.setItem("pinguinitos-socials-v1", JSON.stringify(socials)),
-    [socials],
+      onAuthStateChanged(auth, (user) =>
+        setIsAdmin(user?.email === "admin@pinguinitos.com"),
+      ),
+    [],
   )
-  useEffect(
-    () => localStorage.setItem("pinguinitos-orders-v1", JSON.stringify(orders)),
-    [orders],
-  )
+
+  useEffect(() => {
+    if (!isAdmin) {
+      setOrders([])
+      return
+    }
+    return onSnapshot(
+      collection(db, "orders"),
+      (snapshot) =>
+        setOrders(
+          snapshot.docs
+            .map((item) => item.data() as Order)
+            .sort((a, b) => b.date.localeCompare(a.date)),
+        ),
+      () => setToast("No se pudo cargar el informe de ventas."),
+    )
+  }, [isAdmin])
+
+  const saveStore = (data: Record<string, unknown>) =>
+    setDoc(storeRef, data, { merge: true }).catch(() =>
+      setToast("No se pudieron guardar los cambios en Firebase."),
+    )
+
+  const saveOrder = (order: Order) =>
+    addDoc(collection(db, "orders"), order).catch(() =>
+      setToast("No se pudo registrar el pedido en Firebase."),
+    )
+
+  const uploadProductImage = async (file: File) => {
+    const fileRef = ref(storage, `products/${Date.now()}-${file.name}`)
+    await uploadBytes(fileRef, file, { contentType: file.type })
+    return getDownloadURL(fileRef)
+  }
   useEffect(() => {
     if (!toast) return
     const timer = window.setTimeout(() => setToast(""), 2600)
@@ -753,7 +796,7 @@ export default function App() {
           cart={cart}
           onClose={() => setCheckoutOpen(false)}
           onComplete={(order) => {
-            setOrders((current) => [order, ...current])
+            saveOrder(order)
             setCart([])
             setToast("¡Compra confirmada! Tu factura está lista")
           }}
@@ -764,7 +807,6 @@ export default function App() {
         <AdminLogin
           onClose={() => setLoginOpen(false)}
           onSuccess={() => {
-            sessionStorage.setItem("pinguinitos-admin-session", "active")
             setIsAdmin(true)
             setLoginOpen(false)
             setAdminOpen(true)
@@ -779,38 +821,38 @@ export default function App() {
             setEditing(null)
           }}
           onDelete={(id) => {
-            setProducts((current) =>
-              current.filter((product) => product.id !== id),
-            )
+            const updatedProducts = products.filter((product) => product.id !== id)
+            setProducts(updatedProducts)
+            saveStore({ products: updatedProducts })
             setToast("Producto eliminado")
           }}
           onEdit={setEditing}
           onLogout={() => {
-            sessionStorage.removeItem("pinguinitos-admin-session")
+            void signOut(auth)
             setIsAdmin(false)
             setAdminOpen(false)
             setEditing(null)
             setToast("Sesión de administrador cerrada")
           }}
           onSave={(product) => {
-            setProducts((current) => {
-              const exists = current.some((item) => item.id === product.id)
-              return exists
-                ? current.map((item) =>
-                    item.id === product.id ? product : item,
-                  )
-                : [product, ...current]
-            })
+            const exists = products.some((item) => item.id === product.id)
+            const updatedProducts = exists
+              ? products.map((item) => (item.id === product.id ? product : item))
+              : [product, ...products]
+            setProducts(updatedProducts)
+            saveStore({ products: updatedProducts })
             setEditing(null)
             setToast("Producto guardado correctamente")
           }}
           onSaveSocials={(links) => {
             setSocials(links)
+            saveStore({ socials: links })
             setToast("Canales actualizados")
           }}
           orders={orders}
           products={products}
           socials={socials}
+          onUploadImage={uploadProductImage}
         />
       )}
       {toast && (
@@ -1303,16 +1345,23 @@ function AdminLogin({
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
 
-  const login = (event: FormEvent) => {
+  const login = async (event: FormEvent) => {
     event.preventDefault()
-    if (
-      email.trim().toLowerCase() === "admin@pinguinitos.com" &&
-      password === "Pinguinitos2025"
-    ) {
+    try {
+      const credential = await signInWithEmailAndPassword(
+        auth,
+        email.trim(),
+        password,
+      )
+      if (credential.user.email !== "admin@pinguinitos.com") {
+        await signOut(auth)
+        setError("Esta cuenta no tiene permisos de administración.")
+        return
+      }
       onSuccess()
-      return
+    } catch {
+      setError("El correo o la contraseña no son correctos.")
     }
-    setError("El correo o la contraseña no son correctos.")
   }
 
   return (
@@ -1387,12 +1436,9 @@ function AdminLogin({
           </button>
         </form>
 
-        <div className="mt-6 rounded-2xl border border-[#1d2620]/10 bg-white/60 p-4 text-xs leading-5 text-[#1d2620]/60">
-          <strong className="block text-[#1d2620]">
-            Acceso de demostración
-          </strong>
-          admin@pinguinitos.com · Pinguinitos2025
-        </div>
+        <p className="mt-6 text-xs leading-5 text-[#1d2620]/60">
+          Acceso protegido con Firebase Authentication.
+        </p>
       </div>
     </div>
   )
@@ -1408,6 +1454,7 @@ function AdminPanel({
   onDelete,
   onSave,
   onSaveSocials,
+  onUploadImage,
   onLogout,
 }: {
   products: Product[]
@@ -1419,6 +1466,7 @@ function AdminPanel({
   onDelete: (id: number) => void
   onSave: (product: Product) => void
   onSaveSocials: (links: SocialLinks) => void
+  onUploadImage: (file: File) => Promise<string>
   onLogout: () => void
 }) {
   const emptyForm = {
@@ -1473,15 +1521,16 @@ function AdminPanel({
       canvas.width = Math.round(image.width * scale)
       canvas.height = Math.round(image.height * scale)
       canvas.getContext("2d")?.drawImage(image, 0, 0, canvas.width, canvas.height)
-      const compressedImage = canvas.toDataURL("image/jpeg", 0.8)
-
-      if (compressedImage.length > 900000) {
-        setImageError("No fue posible optimizar la imagen lo suficiente. Prueba otra foto.")
-        return
-      }
-      setForm((current) => ({ ...current, image: compressedImage }))
+      const compressedImage = await new Promise<Blob | null>((resolve) =>
+        canvas.toBlob(resolve, "image/jpeg", 0.8),
+      )
+      if (!compressedImage) throw new Error("No se pudo optimizar la imagen")
+      const imageUrl = await onUploadImage(
+        new File([compressedImage], `${Date.now()}.jpg`, { type: "image/jpeg" }),
+      )
+      setForm((current) => ({ ...current, image: imageUrl }))
     } catch {
-      setImageError("No se pudo procesar esta imagen. Prueba con PNG, JPG o WEBP.")
+      setImageError("No se pudo subir la imagen. Revisa Firebase Storage e inténtalo de nuevo.")
     } finally {
       URL.revokeObjectURL(objectUrl)
     }
