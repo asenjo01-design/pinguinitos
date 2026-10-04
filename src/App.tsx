@@ -368,10 +368,14 @@ export default function App() {
     )
   }, [isAdmin])
 
-  const saveStore = (data: Record<string, unknown>) =>
-    setDoc(storeRef, data, { merge: true }).catch(() =>
-      setToast("No se pudieron guardar los cambios en Firebase."),
-    )
+  const saveStore = async (data: Record<string, unknown>) => {
+    try {
+      await setDoc(storeRef, data, { merge: true })
+    } catch {
+      setToast("No se pudieron guardar los cambios en Firebase.")
+      throw new Error("store-save-failed")
+    }
+  }
 
   const saveOrder = (order: Order) =>
     addDoc(collection(db, "orders"), order).catch(() =>
@@ -820,11 +824,15 @@ export default function App() {
             setAdminOpen(false)
             setEditing(null)
           }}
-          onDelete={(id) => {
+          onDelete={async (id) => {
             const updatedProducts = products.filter((product) => product.id !== id)
             setProducts(updatedProducts)
-            saveStore({ products: updatedProducts })
-            setToast("Producto eliminado")
+            try {
+              await saveStore({ products: updatedProducts })
+              setToast("Producto eliminado")
+            } catch {
+              setProducts(products)
+            }
           }}
           onEdit={setEditing}
           onLogout={() => {
@@ -834,20 +842,29 @@ export default function App() {
             setEditing(null)
             setToast("Sesión de administrador cerrada")
           }}
-          onSave={(product) => {
+          onSave={async (product) => {
             const exists = products.some((item) => item.id === product.id)
             const updatedProducts = exists
               ? products.map((item) => (item.id === product.id ? product : item))
               : [product, ...products]
             setProducts(updatedProducts)
-            saveStore({ products: updatedProducts })
-            setEditing(null)
-            setToast("Producto guardado correctamente")
+            try {
+              await saveStore({ products: updatedProducts })
+              setEditing(null)
+              setToast("Producto guardado correctamente")
+            } catch {
+              setProducts(products)
+              throw new Error("product-save-failed")
+            }
           }}
-          onSaveSocials={(links) => {
+          onSaveSocials={async (links) => {
             setSocials(links)
-            saveStore({ socials: links })
-            setToast("Canales actualizados")
+            try {
+              await saveStore({ socials: links })
+              setToast("Canales actualizados")
+            } catch {
+              setSocials(socials)
+            }
           }}
           orders={orders}
           products={products}
@@ -1464,8 +1481,8 @@ function AdminPanel({
   onClose: () => void
   onEdit: (product: Product | null) => void
   onDelete: (id: number) => void
-  onSave: (product: Product) => void
-  onSaveSocials: (links: SocialLinks) => void
+  onSave: (product: Product) => Promise<void>
+  onSaveSocials: (links: SocialLinks) => Promise<void>
   onUploadImage: (file: File) => Promise<string>
   onLogout: () => void
 }) {
@@ -1480,6 +1497,8 @@ function AdminPanel({
   const [socialForm, setSocialForm] = useState(socials)
   const [showForm, setShowForm] = useState(false)
   const [imageError, setImageError] = useState("")
+  const [isUploadingImage, setIsUploadingImage] = useState(false)
+  const [isSavingProduct, setIsSavingProduct] = useState(false)
   const totalSales = orders.reduce((sum, order) => sum + order.total, 0)
   const soldUnits = orders.reduce(
     (sum, order) =>
@@ -1508,6 +1527,7 @@ function AdminPanel({
     }
 
     const objectUrl = URL.createObjectURL(file)
+    setIsUploadingImage(true)
     try {
       const image = await new Promise<HTMLImageElement>((resolve, reject) => {
         const preview = new Image()
@@ -1532,23 +1552,32 @@ function AdminPanel({
     } catch {
       setImageError("No se pudo subir la imagen. Revisa Firebase Storage e inténtalo de nuevo.")
     } finally {
+      setIsUploadingImage(false)
       URL.revokeObjectURL(objectUrl)
     }
   }
 
-  const submit = (event: FormEvent) => {
+  const submit = async (event: FormEvent) => {
     event.preventDefault()
-    onSave({
-      id: editing?.id ?? Date.now(),
-      title: form.title,
-      category: form.category,
-      description: form.description,
-      price: Number(form.price),
-      image: form.image || photos.botanical,
-      badge: editing?.badge,
-    })
-    setForm(emptyForm)
-    setShowForm(false)
+    if (isUploadingImage || isSavingProduct) return
+    setIsSavingProduct(true)
+    try {
+      await onSave({
+        id: editing?.id ?? Date.now(),
+        title: form.title,
+        category: form.category,
+        description: form.description,
+        price: Number(form.price),
+        image: form.image || photos.botanical,
+        badge: editing?.badge,
+      })
+      setForm(emptyForm)
+      setShowForm(false)
+    } catch {
+      setImageError("No se pudo guardar el producto en Firestore.")
+    } finally {
+      setIsSavingProduct(false)
+    }
   }
 
   return (
@@ -1627,9 +1656,15 @@ function AdminPanel({
               <input
                 accept="image/*"
                 className="sr-only"
+                disabled={isUploadingImage || isSavingProduct}
                 onChange={(event) => handleImage(event.target.files?.[0])}
                 type="file"
               />
+              {isUploadingImage && (
+                <span className="absolute inset-x-4 bottom-4 rounded-lg bg-white/95 px-3 py-2 text-xs font-semibold text-[#0e5d9f] shadow-sm">
+                  Subiendo imagen...
+                </span>
+              )}
               {imageError && (
                 <span className="absolute inset-x-4 bottom-4 rounded-lg bg-white/95 px-3 py-2 text-xs font-semibold text-[#0e5d9f] shadow-sm" role="alert">
                   {imageError}
@@ -1700,8 +1735,17 @@ function AdminPanel({
                   value={form.price}
                 />
               </label>
-              <button className="primary-button w-fit" type="submit">
-                Guardar producto <ArrowIcon />
+              <button
+                className="primary-button w-fit disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={isUploadingImage || isSavingProduct}
+                type="submit"
+              >
+                {isUploadingImage
+                  ? "Subiendo imagen"
+                  : isSavingProduct
+                    ? "Guardando"
+                    : "Guardar producto"}{" "}
+                <ArrowIcon />
               </button>
             </div>
           </form>
