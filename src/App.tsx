@@ -1,4 +1,5 @@
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react"
+import jabonesDeportivos from "./assets/pinguinitos-producto-adjunto.png"
 
 type Product = {
   id: number
@@ -120,6 +121,16 @@ const initialProducts: Product[] = [
     price: 4800,
     image: photos.botanical,
     badge: "Edición limitada",
+  },
+  {
+    id: 7,
+    title: "Trío Deportivo",
+    category: "Edición limitada",
+    description:
+      "Jabones artesanales con divertidas formas deportivas y una fragancia fresca.",
+    price: 5200,
+    image: jabonesDeportivos,
+    badge: "Nuevo",
   },
 ]
 
@@ -283,7 +294,11 @@ const FacebookIcon = () => (
 export default function App() {
   const [products, setProducts] = useState<Product[]>(() => {
     const saved = localStorage.getItem("pinguinitos-products-v2")
-    return saved ? JSON.parse(saved) : initialProducts
+    if (!saved) return initialProducts
+    const savedProducts = JSON.parse(saved) as Product[]
+    return savedProducts.some((product) => product.id === 7)
+      ? savedProducts
+      : [...savedProducts, initialProducts.find((product) => product.id === 7)!]
   })
   const [socials, setSocials] = useState<SocialLinks>(() => {
     const saved = localStorage.getItem("pinguinitos-socials-v1")
@@ -393,18 +408,18 @@ export default function App() {
       <header className="sticky top-0 z-30 border-b border-[#1d2620]/10 bg-[#f8f7f2]/95 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 lg:px-8">
           <button
-            className="group flex items-center gap-2.5"
+            className="group flex flex-col items-start gap-0.5"
             onClick={() => {
               setAdminOpen(false)
               setLoginOpen(false)
               window.scrollTo({ top: 0, behavior: "smooth" })
             }}
           >
-            <span className="grid size-9 place-items-center rounded-full bg-[#dce7d9] font-serif text-lg">
-              P
-            </span>
             <span className="font-serif text-2xl tracking-tight">
               Pinguinitos
+            </span>
+            <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#0d2038]/55">
+              Para que huelas más rico.
             </span>
           </button>
           <nav className="hidden items-center gap-8 text-sm font-medium md:flex">
