@@ -2,7 +2,6 @@ import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react"
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from "firebase/auth"
 import { addDoc, collection, doc, onSnapshot, setDoc } from "firebase/firestore"
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage"
-import jabonesArtesanales from "./assets/JabonesArtesanales.png"
 import jabonesDeportivos from "./assets/pinguinitos-producto-adjunto.png"
 import { auth, db, storage } from "./firebase"
 
@@ -54,7 +53,7 @@ const toUrl = (value: string) =>
   value.startsWith("http") ? value : `https://${value}`
 
 const photos = {
-  hero: jabonesArtesanales,
+  hero: "/JabonesArtesanales.png",
   lavender:
     "https://images.unsplash.com/photo-1607006344380-b6775a0824a7?auto=format&fit=crop&w=900&q=85",
   oatmeal:
