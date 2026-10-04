@@ -371,7 +371,8 @@ export default function App() {
   const saveStore = async (data: Record<string, unknown>) => {
     try {
       await setDoc(storeRef, data, { merge: true })
-    } catch {
+    } catch (error) {
+      console.error("Firebase store save failed", error)
       setToast("No se pudieron guardar los cambios en Firebase.")
       throw new Error("store-save-failed")
     }
@@ -1562,15 +1563,16 @@ function AdminPanel({
     if (isUploadingImage || isSavingProduct) return
     setIsSavingProduct(true)
     try {
-      await onSave({
+      const product: Product = {
         id: editing?.id ?? Date.now(),
         title: form.title,
         category: form.category,
         description: form.description,
         price: Number(form.price),
         image: form.image || photos.botanical,
-        badge: editing?.badge,
-      })
+      }
+      if (editing?.badge) product.badge = editing.badge
+      await onSave(product)
       setForm(emptyForm)
       setShowForm(false)
     } catch {
